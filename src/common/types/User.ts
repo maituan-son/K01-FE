@@ -1,3 +1,4 @@
+import { Subject } from '@/common/types/SubJect';
 import { RoleEnum } from ".";
 
 export default interface User {
@@ -8,5 +9,8 @@ export default interface User {
 	email: string;
 	schoolYear?: string;
 	majorId?: string;
+	subjectId?: string;
 	studentId?: string;
+	teacherId?: string;
+	isBlocked?: boolean;
 }
