@@ -1,4 +1,4 @@
-import { Subject } from '@/common/types/SubJect';
+
 import { RoleEnum } from ".";
 
 export default interface User {

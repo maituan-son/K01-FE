@@ -3,104 +3,62 @@
 import React, { useState } from "react";
 import {
   Card,
+  Tabs,
+  Modal,
+  Select,
+  message,
+  Button,
+  Tag,
+  Space,
+  Tooltip,
+  Statistic,
   Row,
   Col,
   Avatar,
-  Tag,
   Progress,
-  Tabs,
   Table,
-  Button,
   Input,
-  DatePicker,
-  Select,
-  Space,
-  Tooltip,
-  Modal,
-  Form,
-  Rate,
-  Statistic,
 } from "antd";
 import {
-  ArrowLeftOutlined,
+  CalendarOutlined,
+  TeamOutlined,
+  CheckCircleOutlined,
+  FileTextOutlined,
+  StarOutlined,
+  PlusOutlined,
+  EyeOutlined,
   EditOutlined,
-  DeleteOutlined,
   UserOutlined,
   BookOutlined,
   HomeOutlined,
   ClockCircleOutlined,
-  TeamOutlined,
-  CalendarOutlined,
-  CheckCircleOutlined,
-  ExclamationCircleOutlined,
-  FileTextOutlined,
-  StarOutlined,
+  ArrowLeftOutlined,
+  DeleteOutlined,
   SearchOutlined,
-  PlusOutlined,
-  EyeOutlined,
 } from "@ant-design/icons";
-import { useParams } from "react-router-dom";
-import { getClassDetail } from "@/common/services/classSercive";
-import { useQuery } from "@tanstack/react-query";
+import { useParams, useNavigate } from "react-router-dom";
+import { getClassDetail, updateClass } from "@/common/services/classSercive";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getAllUsers } from "@/common/services/userService";
+import { getAllSessionsByClassId } from "@/common/services/sessionService";
+import User from "@/common/types/User";
+
+// Import components
+import ClassDetailHeader from "@/components/admin/ClassDetailHeader";
+import ClassBasicInfo from "@/components/admin/ClassBasicInfo";
+import ClassStatistics from "@/components/admin/ClassStatistics";
+import SessionTable from "@/components/admin/SessionTable";
+import StudentTable from "@/components/admin/StudentTable";
 
 const { TabPane } = Tabs;
-const { TextArea } = Input;
-const { Option } = Select;
 
-interface ClassDetailData {
-  id: string;
-  name: string;
-  code: string;
-  subject: {
-    id: string;
-    name: string;
-  };
-  major: {
-    id: string;
-    name: string;
-  };
-  teacher: {
-    id: string;
-    name: string;
-    avatar?: string;
-    email: string;
-    phone: string;
-  };
-  shift: string;
-  room: string;
-  startDate: string;
-  endDate: string;
-  totalSessions: number;
-  completedSessions: number;
-  currentStudents: number;
-  maxStudents: number;
-  status: "active" | "upcoming" | "completed";
-  description: string;
-  attendanceRate: number;
-  assignmentSubmissionRate: number;
-}
 
-interface Student {
-  id: string;
-  studentCode: string;
-  name: string;
-  avatar?: string;
-  email: string;
-  phone: string;
-  major: string;
-  enrollDate: string;
-  attendanceRate: number;
-  averageScore: number;
-}
 
 interface Schedule {
-  id: string;
+  _id: string;
   sessionNumber: number;
-  date: string;
-  startTime: string;
-  endTime: string;
-  topic: string;
-  room: string;
+  sessionDate: string;
+  note: string;
   status: "completed" | "upcoming" | "cancelled";
   attendanceCount?: number;
 }
@@ -128,6 +86,7 @@ interface Attendance {
 
 const StudenList: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
 
   // Lấy chi tiết lớp học từ API
   const { data: classDetail, isLoading } = useQuery({
@@ -135,13 +94,65 @@ const StudenList: React.FC = () => {
     queryFn: () => getClassDetail(id!),
     enabled: !!id,
   });
+  //lấy sang sách sinh viên
+  const { data: students = [] } = useQuery({
+    queryKey: ["students"],
+    queryFn: () => getAllUsers({ role: "student", includeDeleted: false }),
+  });
 
-  const [students, setStudents] = useState<Student[]>([]);
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [attendances, setAttendances] = useState<Attendance[]>([]);
+  // Lấy danh sách buổi học từ API
+  const { data: sessions = [], isLoading: sessionsLoading } = useQuery({
+    queryKey: ["sessions", id],
+    queryFn: () => getAllSessionsByClassId(id!),
+    enabled: !!id,
+  });
+
+
+  const [assignments] = useState<Assignment[]>([]);
+  const [attendances] = useState<Attendance[]>([]);
   const [activeTab, setActiveTab] = useState("schedule");
-  const [loading, setLoading] = useState(false);
+
+  // State cho modal thêm sinh viên
+  const [addStudentModalOpen, setAddStudentModalOpen] = useState(false);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+
+  const queryClient = useQueryClient();
+
+  // Mutation updateClass bằng react-query
+  const { mutate: mutateUpdateClass, isLoading: adding } = useMutation({
+    mutationFn: (studentIds: string[]) =>
+      updateClass(classDetail._id, { studentIds }),
+    onSuccess: () => {
+      message.success("Cập nhật danh sách sinh viên thành công!");
+      setAddStudentModalOpen(false);
+      setSelectedStudentIds([]);
+      queryClient.invalidateQueries({
+        queryKey: ["class-detail", id],
+      });
+    },
+    onError: () => {
+      message.error("Cập nhật danh sách sinh viên thất bại!");
+    },
+  });
+
+  // Hàm thêm sinh viên
+  const handleAddStudents = () => {
+    if (!selectedStudentIds.length) return;
+    // Lấy current student IDs từ objects
+    const currentIds = (classDetail.studentIds || []).map((sid: { _id: string }) => sid._id);
+    // Chỉ thêm những sinh viên chưa có trong lớp
+    const newIds = Array.from(
+      new Set([...currentIds, ...selectedStudentIds.map(String)])
+    );
+    mutateUpdateClass(newIds);
+  };
+
+  // Hàm xóa sinh viên khỏi lớp
+  const handleRemoveStudent = (studentId: string) => {
+    const currentIds = (classDetail.studentIds || []).map((sid: { _id: string }) => sid._id);
+    const newIds = currentIds.filter((id: string) => id !== studentId);
+    mutateUpdateClass(newIds);
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -203,69 +214,72 @@ const StudenList: React.FC = () => {
     }
   };
 
+  // Hàm chuyển đổi ca học thành thời gian
+  const getShiftTime = (shift: string) => {
+    switch (shift) {
+      case "1":
+        return "7h-9h";
+      case "2":
+        return "9h-11h";
+      case "3":
+        return "11h-13h";
+      case "4":
+        return "13h-15h";
+      case "5":
+        return "15h-17h";
+      case "6":
+        return "17h-19h";
+      default:
+        return "Chưa có thời gian";
+    }
+  };
+
   const studentColumns = [
     {
       title: "Mã SV",
-      dataIndex: "studentCode",
-      key: "studentCode",
+      dataIndex: "studentId",
+      key: "studentId",
       width: 100,
     },
     {
-      title: "Họ và tên",
-      key: "name",
-      render: (record: Student) => (
-        <div className="flex items-center space-x-3">
-          <Avatar size={40} src={record.avatar} icon={<UserOutlined />} />
+      title: "Tên đăng nhập",
+      dataIndex: "username",
+      key: "username",
+      width: 170,
+    },
+    {
+      title: "Năm học",
+      dataIndex: "schoolYear",
+      key: "schoolYear",
+      width: 100,
+    },
+    {
+      title: "Họ và Tên",
+      dataIndex: "fullname",
+      key: "fullname",
+      width: 250,
+    },
+    {
+      title: "Email",
+      key: "email",
+      render: (record: User) => (
+        <div className="flex items-center space-x-2">
+          <Avatar size={40} icon={<UserOutlined />} />
           <div>
-            <div className="font-medium text-gray-900">{record.name}</div>
             <div className="text-sm text-gray-500">{record.email}</div>
           </div>
         </div>
       ),
     },
     {
-      title: "Số điện thoại",
-      dataIndex: "phone",
-      key: "phone",
-      width: 120,
-    },
-    {
-      title: "Ngày nhập học",
-      dataIndex: "enrollDate",
-      key: "enrollDate",
-      width: 120,
-    },
-    {
-      title: "Tỷ lệ điểm danh",
-      key: "attendanceRate",
+      title: "Trạng thái",
+      key: "status",
       width: 150,
-      render: (record: Student) => (
+      render: (record: User) => (
         <div>
-          <div className="text-sm font-medium mb-1">
-            {record.attendanceRate}%
-          </div>
-          <Progress
-            percent={record.attendanceRate}
-            size="small"
-            strokeColor={record.attendanceRate >= 80 ? "#52c41a" : "#faad14"}
-          />
-        </div>
-      ),
-    },
-    {
-      title: "Điểm TB",
-      key: "averageScore",
-      width: 100,
-      render: (record: Student) => (
-        <div className="text-center">
-          <div className="text-lg font-bold text-blue-600">
-            {record.averageScore}
-          </div>
-          <Rate
-            disabled
-            defaultValue={Math.round(record.averageScore / 2)}
-            className="text-xs"
-          />
+          <Tag color={record.isBlocked ? "red" : "green"}>
+            {record.isBlocked ? "Bị khóa" : "Hoạt động"}
+          </Tag>
         </div>
       ),
     },
@@ -273,22 +287,16 @@ const StudenList: React.FC = () => {
       title: "Thao tác",
       key: "actions",
       width: 100,
-      render: (record: Student) => (
+      render: (record: User) => (
         <Space size="small">
-          <Tooltip title="Xem chi tiết">
+          <Tooltip title="Xóa khỏi lớp">
             <Button
               type="text"
-              icon={<EyeOutlined />}
+              danger
+              icon={<DeleteOutlined />}
               size="small"
               className="!rounded-button cursor-pointer whitespace-nowrap"
-            />
-          </Tooltip>
-          <Tooltip title="Chỉnh sửa">
-            <Button
-              type="text"
-              icon={<EditOutlined />}
-              size="small"
-              className="!rounded-button cursor-pointer whitespace-nowrap"
+              onClick={() => handleRemoveStudent(record._id)}
             />
           </Tooltip>
         </Space>
@@ -299,44 +307,57 @@ const StudenList: React.FC = () => {
   const scheduleColumns = [
     {
       title: "Buổi",
-      dataIndex: "sessionNumber",
       key: "sessionNumber",
       width: 60,
-      render: (session: number) => (
-        <div className="text-center font-medium text-blue-600">#{session}</div>
+      render: (_: unknown, __: unknown, index: number) => (
+        <div className="text-center font-medium text-blue-600">#{index + 1}</div>
       ),
     },
     {
-      title: "Ngày",
-      dataIndex: "date",
-      key: "date",
+      title: "Ngày học",
+      dataIndex: "sessionDate",
+      key: "sessionDate",
       width: 100,
-    },
-    {
-      title: "Thời gian",
-      key: "time",
-      width: 120,
-      render: (record: Schedule) => (
+      render: (date: string) => (
         <div className="text-gray-700">
-          <ClockCircleOutlined className="mr-1" />
-          {record.startTime} - {record.endTime}
+          {date ? new Date(date).toLocaleDateString('vi-VN') : "Chưa có"}
         </div>
       ),
     },
     {
-      title: "Chủ đề",
-      dataIndex: "topic",
-      key: "topic",
+      title: "Thời gian",
+      key: "time",
+      width: 150,
+      render: (record: Schedule) => (
+        <div className="text-gray-700">
+          <ClockCircleOutlined className="mr-1" />
+          <div>
+            <div className="font-medium">Ca {classDetail.shift}</div>
+            <div className="text-xs text-gray-500">
+              {getShiftTime(classDetail.shift)}
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: "Ghi chú",
+      dataIndex: "note",
+      key: "note",
+      render: (note: string) => (
+        <div className="text-gray-700">
+          {note || "Không có ghi chú"}
+        </div>
+      ),
     },
     {
       title: "Phòng học",
-      dataIndex: "room",
       key: "room",
       width: 80,
-      render: (room: string) => (
+      render: () => (
         <span className="text-gray-700">
           <HomeOutlined className="mr-1" />
-          {room}
+          {classDetail.room || "Chưa có"}
         </span>
       ),
     },
@@ -348,14 +369,14 @@ const StudenList: React.FC = () => {
         record.attendanceCount !== undefined ? (
           <div className="text-center">
             <div className="text-sm font-medium">
-              {record.attendanceCount}/42
+              {record.attendanceCount}/{classDetail.studentIds?.length || 0}
             </div>
             <div className="text-xs text-gray-500">
-              {Math.round((record.attendanceCount / 42) * 100)}%
+              {Math.round((record.attendanceCount / (classDetail.studentIds?.length || 1)) * 100)}%
             </div>
           </div>
         ) : (
-          <span className="text-gray-400">-</span>
+          <span className="text-gray-500">-</span>
         ),
     },
     {
@@ -559,288 +580,77 @@ const StudenList: React.FC = () => {
     return <div>Loading...</div>;
   }
 
+
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <a href="/super-admin/classes" data-readdy="true">
-                <Button
-                  type="text"
-                  icon={<ArrowLeftOutlined />}
-                  className="!rounded-button cursor-pointer whitespace-nowrap"
-                >
-                  Quay lại
-                </Button>
-              </a>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  Chi tiết lớp học
-                </h1>
-                <p className="text-gray-600 mt-1">
-                  Thông tin chi tiết và quản lý lớp học
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-3">
-              <Button
-                icon={<EditOutlined />}
-                className="!rounded-button cursor-pointer whitespace-nowrap"
-              >
-                Chỉnh sửa
-              </Button>
-              <Button
-                danger
-                icon={<DeleteOutlined />}
-                className="!rounded-button cursor-pointer whitespace-nowrap"
-              >
-                Xóa lớp
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ClassDetailHeader
+        onBack={() => navigate("/super-admin/classes")}
+        onEdit={() => console.log("Edit class")}
+        onDelete={() => console.log("Delete class")}
+      />
 
       <div className="max-w-7xl mx-auto px-6 py-6">
         {/* Basic Information */}
-        <Card className="mb-6">
-          <Row gutter={24}>
-            <Col span={16}>
-              <div className="space-y-4">
-                <div>
-                  <h2 className="text-3xl font-bold text-gray-900 mb-2">
-                    {classDetail.name}
-                  </h2>
-                  <div className="flex items-center space-x-4 text-gray-600">
-                    <span className="font-mono text-sm bg-gray-100 px-2 py-1 rounded">
-                      {classDetail.code}
-                    </span>
-                    <Tag
-                      color={getStatusColor(classDetail.status)}
-                      className="!rounded-button"
-                    >
-                      {getStatusText(classDetail.status)}
-                    </Tag>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-6">
-                  <div>
-                    <div className="text-sm text-gray-500 mb-1">Môn học</div>
-                    <div className="flex items-center text-blue-600">
-                      <BookOutlined className="mr-2" />
-                      <span className="font-medium">
-                        {classDetail.name || ""}
-                      </span>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-500 mb-1">Ngành học</div>
-                    <div className="font-medium text-gray-700">
-                      {classDetail.name || ""}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-500 mb-1">Ca học</div>
-                    <div className="flex items-center text-gray-700">
-                      <ClockCircleOutlined className="mr-2" />
-                      <span className="font-medium">{classDetail.shift}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-gray-500 mb-1">Phòng học</div>
-                    <div className="flex items-center text-gray-700">
-                      <HomeOutlined className="mr-2" />
-                      <span className="font-medium">{classDetail.room}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="text-sm text-gray-500 mb-2">Mô tả</div>
-                  <p className="text-gray-700 leading-relaxed">
-                    {classDetail.description}
-                  </p>
-                </div>
-              </div>
-            </Col>
-            <Col span={8}>
-              <div className="space-y-6">
-                <div className="text-center">
-                  <div className="text-sm text-gray-500 mb-2">Giảng viên</div>
-                  <div className="flex flex-col items-center space-y-3">
-                    <Avatar
-                      size={80}
-                      src={classDetail.teacher?.avatar}
-                      icon={<UserOutlined />}
-                    />
-                    <div className="font-bold text-lg text-gray-900">
-                      {classDetail.teacher?.name || ""}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {classDetail.teacher?.email || ""}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {classDetail.teacher?.phone || ""}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="text-sm text-gray-500">Thời gian học</div>
-                  <div className="bg-gray-50 p-3 rounded-lg">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Bắt đầu:</span>
-                      <span className="font-medium">
-                        {classDetail.startDate}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-sm mt-1">
-                      <span className="text-gray-600">Kết thúc:</span>
-                      <span className="font-medium">{classDetail.endDate}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </Col>
-          </Row>
-        </Card>
+        <ClassBasicInfo
+          classDetail={classDetail}
+          getStatusColor={getStatusColor}
+          getStatusText={getStatusText}
+        />
 
         {/* Statistics */}
-        <Row gutter={16} className="mb-6">
-          <Col span={6}>
-            <Card className="text-center">
-              <Statistic
-                title="Sĩ số hiện tại"
-                value={classDetail.studentIds?.length || 0}
-                suffix={`/ ${classDetail.maxStudents || 0}`}
-                valueStyle={{ color: "#1890ff" }}
-                prefix={<TeamOutlined />}
-              />
-              <Progress
-                percent={
-                  classDetail.maxStudents
-                    ? Math.round(
-                        ((classDetail.studentIds?.length || 0) /
-                          classDetail.maxStudents) *
-                          100
-                      )
-                    : 0
-                }
-                size="small"
-                strokeColor="#1890ff"
-                className="mt-2"
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card className="text-center">
-              <Statistic
-                title="Tiến độ học tập"
-                value={classDetail.completedSessions}
-                suffix={`/ ${classDetail.totalSessions}`}
-                valueStyle={{ color: "#52c41a" }}
-                prefix={<BookOutlined />}
-              />
-              <Progress
-                percent={Math.round(
-                  (classDetail.completedSessions / classDetail.totalSessions) *
-                    100
-                )}
-                size="small"
-                strokeColor="#52c41a"
-                className="mt-2"
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card className="text-center">
-              <Statistic
-                title="Tỷ lệ điểm danh"
-                value={classDetail.attendanceRate}
-                suffix="%"
-                valueStyle={{ color: "#faad14" }}
-                prefix={<CheckCircleOutlined />}
-              />
-            </Card>
-          </Col>
-          <Col span={6}>
-            <Card className="text-center">
-              <Statistic
-                title="Tỷ lệ nộp bài"
-                value={classDetail.assignmentSubmissionRate}
-                suffix="%"
-                valueStyle={{ color: "#722ed1" }}
-                prefix={<FileTextOutlined />}
-              />
-            </Card>
-          </Col>
-        </Row>
+        <ClassStatistics classDetail={classDetail} />
 
         {/* Tabs Content */}
         <Card>
           <Tabs activeKey={activeTab} onChange={setActiveTab} size="large">
             <TabPane tab="Lịch học" key="schedule" icon={<CalendarOutlined />}>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    Lịch học chi tiết
-                  </h3>
-                  <Button
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    className="!rounded-button cursor-pointer whitespace-nowrap"
-                  >
-                    Thêm buổi học
-                  </Button>
-                </div>
-                <Table
-                  columns={scheduleColumns}
-                  dataSource={schedules}
-                  rowKey="id"
-                  pagination={false}
-                  scroll={{ x: 800 }}
-                />
-              </div>
+              <SessionTable
+                sessions={sessions}
+                classDetail={classDetail}
+                sessionsLoading={sessionsLoading}
+                getStatusColor={getStatusColor}
+                getStatusText={getStatusText}
+                onCreateSession={() => console.log("Create session")}
+              />
             </TabPane>
 
             <TabPane tab="Sinh viên" key="students" icon={<TeamOutlined />}>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    Danh sách sinh viên ({students.length})
-                  </h3>
-                  <div className="flex items-center space-x-3">
-                    <Input
-                      placeholder="Tìm kiếm sinh viên..."
-                      prefix={<SearchOutlined />}
-                      className="w-64 !rounded-button"
-                    />
-                    <Button
-                      type="primary"
-                      icon={<PlusOutlined />}
-                      className="!rounded-button cursor-pointer whitespace-nowrap"
-                    >
-                      Thêm sinh viên
-                    </Button>
-                  </div>
-                </div>
-                <Table
-                  columns={studentColumns}
-                  dataSource={students}
-                  rowKey="id"
-                  pagination={{
-                    pageSize: 10,
-                    showSizeChanger: true,
-                    showQuickJumper: true,
-                    showTotal: (total, range) =>
-                      `${range[0]}-${range[1]} của ${total} sinh viên`,
-                  }}
-                  scroll={{ x: 900 }}
+              <StudentTable
+                students={students}
+                classDetail={classDetail}
+                onAddStudent={() => setAddStudentModalOpen(true)}
+                onRemoveStudent={handleRemoveStudent}
+              />
+              {/* Modal chọn sinh viên */}
+              <Modal
+                title="Thêm sinh viên vào lớp"
+                open={addStudentModalOpen}
+                onCancel={() => setAddStudentModalOpen(false)}
+                onOk={handleAddStudents}
+                confirmLoading={adding}
+                okText="Thêm"
+                cancelText="Hủy"
+              >
+                <Select
+                  mode="multiple"
+                  style={{ width: "100%" }}
+                  placeholder="Nhập hoặc chọn mã sinh viên"
+                  value={selectedStudentIds}
+                  onChange={(ids) => setSelectedStudentIds(ids.map(String))}
+                  options={students
+                    .filter((s) => {
+                      const currentIds = (classDetail.studentIds || []).map((sid: { _id: string }) => sid._id);
+                      return !currentIds.includes(s._id);
+                    })
+                    .map((s) => ({
+                      label: `${s.fullname} (${s.studentId})`,
+                      value: String(s._id),
+                    }))}
+                  notFoundContent="Không có sinh viên nào để thêm"
                 />
-              </div>
+              </Modal>
             </TabPane>
 
             <TabPane
@@ -915,7 +725,7 @@ const StudenList: React.FC = () => {
                 </div>
 
                 <Row gutter={16}>
-                  <Col span={8}>
+                  {/* <Col span={8}>
                     <Card className="text-center">
                       <Statistic
                         title="Điểm trung bình lớp"
@@ -926,7 +736,7 @@ const StudenList: React.FC = () => {
                       />
                       <Rate disabled defaultValue={4} className="mt-2" />
                     </Card>
-                  </Col>
+                  </Col> */}
                   <Col span={8}>
                     <Card className="text-center">
                       <Statistic

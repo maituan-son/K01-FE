@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   Table,
   Button,
@@ -62,7 +62,15 @@ const shiftOptions = [
   { label: "Ca 5 (15h-17h)", value: "5" },
   { label: "Ca 6 (17h-19h)", value: "6" },
 ];
-
+const daysOfWeekOptions = [
+  { label: "Thứ 2", value: 2 },
+  { label: "Thứ 3", value: 3 },
+  { label: "Thứ 4", value: 4 },
+  { label: "Thứ 5", value: 5 },
+  { label: "Thứ 6", value: 6 },
+  { label: "Thứ 7", value: 7 },
+  { label: "Chủ nhật", value: 8 },
+];
 const shiftLabel = (v: string) => {
   const found = shiftOptions.find((s) => s.value === v);
   return found ? found.label : v;
@@ -257,14 +265,13 @@ const ClassManagementPage = () => {
       key: "teacherId",
       width: 180,
       render: (teacherId: any) => {
-        const teacher =
-          typeof teacherId === "object"
-            ? teacherId
-            : teachers.find((t) => t._id === teacherId);
+        const teacher = teachers.find((t) => t._id === teacherId._id);
         return (
           <div className="flex items-center space-x-2">
             <Avatar size={32} icon={<UserOutlined />} />
-            <span className="text-gray-700">{teacher?.fullname}</span>
+            <span className="text-gray-700">
+              {teacher ? teacher?.fullname : "Không rõ"}
+            </span>
           </div>
         );
       },
@@ -432,6 +439,11 @@ const ClassManagementPage = () => {
       teacherId:
         typeof cls.teacherId === "object" ? cls.teacherId._id : cls.teacherId,
       startDate: cls.startDate ? dayjs(cls.startDate) : undefined,
+      daysOfWeek: Array.isArray(cls.daysOfWeek)
+        ? cls.daysOfWeek
+        : typeof cls.daysOfWeek === "string"
+        ? cls.daysOfWeek.split(",").map(Number)
+        : [],
       studentIds: Array.isArray(cls.studentIds)
         ? cls.studentIds.map((s: any) => (typeof s === "string" ? s : s._id))
         : [],
@@ -449,10 +461,10 @@ const ClassManagementPage = () => {
         startDate: values.startDate
           ? values.startDate.format("YYYY-MM-DD")
           : undefined,
-        daysOfWeek:
-          values.daysOfWeek !== undefined
-            ? String(values.daysOfWeek)
-            : undefined,
+        daysOfWeek: Array.isArray(values.daysOfWeek)
+          ? values.daysOfWeek.join(",")
+          : values.daysOfWeek,
+        room: Array.isArray(values.room) ? values.room[0] : values.room, // Đảm bảo room là string
       };
       if (editingClass) {
         updateMutation.mutate({ id: editingClass._id, payload });
@@ -775,7 +787,7 @@ const ClassManagementPage = () => {
             </Col>
           </Row>
           <Row gutter={16}>
-            <Col span={8}>
+            {/* <Col span={8}>
               <Form.Item
                 label="Số ngày trong tuần"
                 name="daysOfWeek"
@@ -794,7 +806,7 @@ const ClassManagementPage = () => {
                   className="w-full !rounded-button"
                 />
               </Form.Item>
-            </Col>
+            </Col> */}
             <Col span={8}>
               <Form.Item
                 label="Ngày bắt đầu"
@@ -810,7 +822,25 @@ const ClassManagementPage = () => {
                 />
               </Form.Item>
             </Col>
-            <Col span={8}>{/* ...các trường khác nếu có... */}</Col>
+            <Col span={8}>
+              <Form.Item
+                label="Các ngày trong tuần"
+                name="daysOfWeek"
+                rules={[
+                  {
+                    required: true,
+                    message: "Vui lòng chọn các ngày học trong tuần",
+                  },
+                ]}
+              >
+                <Select
+                  mode="multiple"
+                  placeholder="Chọn các ngày học (VD: Thứ 2, 4, 6)"
+                  options={daysOfWeekOptions}
+                  className="w-full !rounded-button"
+                />
+              </Form.Item>
+            </Col>
           </Row>
           <Form.Item label="Mô tả" name="description">
             <Input.TextArea
@@ -821,39 +851,6 @@ const ClassManagementPage = () => {
           </Form.Item>
         </Form>
       </Modal>
-      <style jsx global>{`
-        .!rounded-button {
-          border-radius: 8px !important;
-        }
-        .ant-table-thead > tr > th {
-          background-color: #fafafa;
-          font-weight: 600;
-        }
-        .ant-table-tbody > tr:hover > td {
-          background-color: #f5f5f5;
-        }
-        .ant-progress-inner {
-          border-radius: 4px;
-        }
-        .ant-tag {
-          border-radius: 6px;
-        }
-        .ant-btn {
-          border-radius: 8px;
-        }
-        .ant-input {
-          border-radius: 8px;
-        }
-        .ant-select-selector {
-          border-radius: 8px !important;
-        }
-        .ant-picker {
-          border-radius: 8px;
-        }
-        .ant-input-number {
-          border-radius: 8px;
-        }
-      `}</style>
     </div>
   );
 };

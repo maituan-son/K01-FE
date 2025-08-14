@@ -9,6 +9,8 @@ import {
   Select,
   Popconfirm,
   message,
+  Row,
+  Col,
 } from "antd";
 import {
   PlusOutlined,
@@ -22,6 +24,7 @@ import {
   updateRole,
   blockUser,
 } from "../../common/services/userService";
+import { getAllMajors } from "../../common/services/majorServices";
 import User from "../../common/types/User";
 import { RoleEnum } from "../../common/types";
 
@@ -31,6 +34,7 @@ const UserManagementPage: React.FC = () => {
   const [search, setSearch] = useState("");
   const [modalVisible, setModalVisible] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [selectedRole, setSelectedRole] = useState<string>();
   const [form] = Form.useForm();
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
 
@@ -40,6 +44,11 @@ const UserManagementPage: React.FC = () => {
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["users"],
     queryFn: () => getAllUsers(),
+  });
+
+  const { data: majors = [] } = useQuery({
+    queryKey: ["majors"],
+    queryFn: () => getAllMajors(),
   });
 
   // Mutations
@@ -94,12 +103,14 @@ const UserManagementPage: React.FC = () => {
   const handleAdd = () => {
     setEditingUser(null);
     form.resetFields();
+    setSelectedRole(undefined);
     setModalVisible(true);
   };
 
   const handleEdit = (user: User) => {
     setEditingUser(user);
     form.setFieldsValue(user);
+    setSelectedRole(user.role);
     setModalVisible(true);
   };
 
@@ -110,6 +121,10 @@ const UserManagementPage: React.FC = () => {
   const handleModalOk = async () => {
     try {
       const values = await form.validateFields();
+      // Nếu là teacher thì xóa majorId khỏi values
+      if (values.role === "teacher") {
+        delete values.majorId;
+      }
       if (editingUser) {
         updateMutation.mutate({ id: editingUser._id, values });
       } else {
@@ -142,6 +157,15 @@ const UserManagementPage: React.FC = () => {
         ) : (
           <span style={{ color: "green" }}>Hoạt động</span>
         ),
+    },
+    {
+      title: "Chuyên ngành",
+      dataIndex: "majorId",
+      key: "majorId",
+      render: (majorId: string) => {
+        const major = majors.find((m: any) => m._id === majorId);
+        return <span>{major ? major.name : ""}</span>;
+      },
     },
     {
       title: "Thao tác",
@@ -203,54 +227,75 @@ const UserManagementPage: React.FC = () => {
         destroyOnClose
       >
         <Form form={form} layout="vertical">
-          <Form.Item
-            name="fullname"
-            label="Họ tên"
-            rules={[{ required: true }]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="username"
-            label="Username"
-            rules={[{ required: true }]}
-          >
-            <Input />
-          </Form.Item>
-          <Form.Item
-            name="email"
-            label="Email"
-            rules={[{ required: true, type: "email" }]}
-          >
-            <Input />
-          </Form.Item>
-          {!editingUser && (
-            <Form.Item
-              name="password"
-              label="Mật khẩu"
-              rules={[{ required: true }]}
-            >
-              <Input.Password />
-            </Form.Item>
-          )}
-          <Form.Item name="role" label="Vai trò" rules={[{ required: true }]}>
-            <Select>
-              {Object.values(RoleEnum).map((role) => (
-                <Option key={role} value={role}>
-                  {role}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item name="schoolYear" label="Năm học">
-            <Input />
-          </Form.Item>
-          <Form.Item name="studentId" label="Mã SV">
-            <Input />
-          </Form.Item>
-          <Form.Item name="phone" label="Số điện thoại">
-            <Input />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="fullname"
+                label="Họ tên"
+                rules={[{ required: true }]}
+              >
+                <Input />
+              </Form.Item>
+              <Form.Item
+                name="username"
+                label="Username"
+                rules={[{ required: true }]}
+              >
+                <Input />
+              </Form.Item>
+              <Form.Item
+                name="email"
+                label="Email"
+                rules={[{ required: true, type: "email" }]}
+              >
+                <Input />
+              </Form.Item>
+              {!editingUser && (
+                <Form.Item
+                  name="password"
+                  label="Mật khẩu"
+                  rules={[{ required: true }]}
+                >
+                  <Input.Password />
+                </Form.Item>
+              )}
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="role"
+                label="Vai trò"
+                rules={[{ required: true }]}
+              >
+                <Select onChange={(value) => setSelectedRole(value)}>
+                  {Object.values(RoleEnum).map((role) => (
+                    <Option key={role} value={role}>
+                      {role}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item name="schoolYear" label="Năm học">
+                <Input />
+              </Form.Item>
+              <Form.Item name="studentId" label="Mã SV">
+                <Input />
+              </Form.Item>
+              <Form.Item name="phone" label="Số điện thoại">
+                <Input />
+              </Form.Item>
+              {selectedRole !== "teacher" && (
+                <Form.Item name="majorId" label="Chuyên ngành">
+                  <Select placeholder="Chọn chuyên ngành">
+                    {majors.map((major: any) => (
+                      <Option key={major._id} value={major._id}>
+                        {major.name}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              )}
+            </Col>
+          </Row>
         </Form>
       </Modal>
     </div>

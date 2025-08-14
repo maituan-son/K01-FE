@@ -6,6 +6,7 @@ export interface Class {
   teacherId: string;
   studentIds: string[];
   startDate: string;
+   daysOfWeek: string
   totalSessions: number;
   shift: string;
   room?: string | null;
@@ -13,4 +14,5 @@ export interface Class {
   maxStudents?: number;
   deletedAt?: string | null;
   createdAt: string;
+ 
 }
