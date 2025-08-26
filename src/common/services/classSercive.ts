@@ -1,8 +1,9 @@
+import { Params } from "../types/api";
 import { Class } from "../types/Class";
 import apiClient from "./apiClient";
-export const getAllClasses = async (params?: { includeDeleted?: boolean }): Promise<Class[]> => {
+export const getAllClasses = async (params?: Params): Promise<Class[]> => {
   const response = await apiClient.get("/class", {params});
-  return response.data.data;
+  return response.data.data || response.data;
 }
 export const getClassDetail = async (id: string) => {
   const response = await apiClient.get(`/class/${id}`);

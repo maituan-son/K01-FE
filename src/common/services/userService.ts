@@ -1,6 +1,7 @@
+import { Params } from "../types/api";
 import User from "../types/User";
 import apiClient from "./apiClient";
-export const getAllUsers = async (params?: { includeDeleted?: boolean , role?: string }): Promise<User[]> => {
+export const getAllUsers = async (params?: Params): Promise<User[]> => {
   const response = await apiClient.get("/user", {params});
   return response.data.data;
 };

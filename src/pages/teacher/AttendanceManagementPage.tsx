@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   Card,
   Button,
@@ -6,234 +6,263 @@ import {
   Select,
   Table,
   Statistic,
-  Progress,
-  Tabs,
   message,
-  Breadcrumb,
   Radio,
-  Tag,
+  Spin,
 } from "antd";
 import {
-  HomeOutlined,
   CheckCircleOutlined,
   BarChartOutlined,
   CheckOutlined,
   CloseOutlined,
   ExclamationCircleOutlined,
-  ReloadOutlined,
-  ExportOutlined,
   SearchOutlined,
   UserAddOutlined,
 } from "@ant-design/icons";
+import {
+  getAllClasses,
+  getClassDetail,
+} from "../../common/services/classSercive";
+import { getAllSessionsByClassId } from "../../common/services/sessionService";
+import {
+  getAttendances,
+  updateAttendance,
+  createAttendance,
+} from "../../common/services/attendance";
+import { Attendance } from "@/common/types/attendance";
+
 const { Option } = Select;
-const { TabPane } = Tabs;
-
-const classes = [
-  { value: "cntt01-k15", label: "CNTT01-K15" },
-  { value: "cntt02-k15", label: "CNTT02-K15" },
-  { value: "ktoan01-k15", label: "KTOAN01-K15" },
-  { value: "qtkd01-k15", label: "QTKD01-K15" },
-  { value: "nna01-k15", label: "NNA01-K15" },
-  { value: "xd01-k15", label: "XD01-K15" },
-];
-const subjects = [
-  { value: "lap-trinh-web", label: "Lập trình Web" },
-  { value: "co-so-du-lieu", label: "Cơ sở dữ liệu" },
-  { value: "mang-may-tinh", label: "Mạng máy tính" },
-  { value: "toan-cao-cap", label: "Toán cao cấp" },
-  { value: "tieng-anh", label: "Tiếng Anh" },
-];
-const sessions = [
-  {
-    value: "session1",
-    label: "Buổi 1 - 07:00-09:30",
-    date: "2025-01-13",
-    subject: "Lập trình Web",
-  },
-  {
-    value: "session2",
-    label: "Buổi 2 - 09:45-12:15",
-    date: "2025-01-13",
-    subject: "Cơ sở dữ liệu",
-  },
-  {
-    value: "session3",
-    label: "Buổi 3 - 13:00-15:30",
-    date: "2025-01-14",
-    subject: "Mạng máy tính",
-  },
-  {
-    value: "session4",
-    label: "Buổi 4 - 15:45-18:15",
-    date: "2025-01-15",
-    subject: "Toán cao cấp",
-  },
-  {
-    value: "session5",
-    label: "Buổi 5 - 18:30-21:00",
-    date: "2025-01-16",
-    subject: "Tiếng Anh",
-  },
-];
-
-const initialStudentsData = [
-  {
-    key: "1",
-    studentId: "SV001",
-    fullName: "Nguyễn Văn An",
-    class: "CNTT01-K15",
-    status: "present",
-    note: "",
-    attendanceRate: 95,
-  },
-  {
-    key: "2",
-    studentId: "SV002",
-    fullName: "Trần Thị Bình",
-    class: "CNTT01-K15",
-    status: "present",
-    note: "",
-    attendanceRate: 88,
-  },
-  {
-    key: "3",
-    studentId: "SV003",
-    fullName: "Lê Văn Cường",
-    class: "CNTT01-K15",
-    status: "late",
-    note: "Đến muộn 15 phút",
-    attendanceRate: 92,
-  },
-  {
-    key: "4",
-    studentId: "SV004",
-    fullName: "Phạm Thị Dung",
-    class: "CNTT01-K15",
-    status: "absent",
-    note: "Xin phép nghỉ học",
-    attendanceRate: 75,
-  },
-  {
-    key: "5",
-    studentId: "SV005",
-    fullName: "Hoàng Văn Em",
-    class: "CNTT01-K15",
-    status: "present",
-    note: "",
-    attendanceRate: 98,
-  },
-  {
-    key: "6",
-    studentId: "SV006",
-    fullName: "Vũ Thị Phương",
-    class: "CNTT01-K15",
-    status: "present",
-    note: "",
-    attendanceRate: 85,
-  },
-  {
-    key: "7",
-    studentId: "SV007",
-    fullName: "Đỗ Văn Giang",
-    class: "CNTT01-K15",
-    status: "late",
-    note: "Đến muộn 5 phút",
-    attendanceRate: 90,
-  },
-  {
-    key: "8",
-    studentId: "SV008",
-    fullName: "Ngô Thị Hoa",
-    class: "CNTT01-K15",
-    status: "present",
-    note: "",
-    attendanceRate: 93,
-  },
-];
 
 const AttendanceManagementPage: React.FC = () => {
+  const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState("");
-  const [selectedClass, setSelectedClass] = useState("cntt01-k15");
-  const [selectedSubject, setSelectedSubject] = useState("");
+  const [selectedClass, setSelectedClass] = useState("");
   const [selectedSession, setSelectedSession] = useState("");
-  const [viewMode, setViewMode] = useState("attendance");
-  const [studentsData, setStudentsData] = useState(initialStudentsData);
+  const [classes, setClasses] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<any[]>([]);
+  const [students, setStudents] = useState<any[]>([]);
+  const [studentsData, setStudentsData] = useState<any[]>([]);
+  const [attendances, setAttendances] = useState<Attendance[]>([]);
+  const [allSessionAttendances, setAllSessionAttendances] = useState<any[]>([]);
 
-  const filteredStudentsData = studentsData.filter((student) => {
-    const matchesSearch =
-      student.fullName.toLowerCase().includes(searchText.toLowerCase()) ||
-      student.studentId.toLowerCase().includes(searchText.toLowerCase());
-    const matchesClass =
-      !selectedClass ||
-      student.class === classes.find((c) => c.value === selectedClass)?.label;
-    return matchesSearch && matchesClass;
-  });
-
-  const handleAttendanceChange = (studentKey: string, status: string) => {
-    setStudentsData(
-      studentsData.map((student) =>
-        student.key === studentKey ? { ...student, status } : student
-      )
-    );
+  // Helper fetch
+  const safeFetch = async (fn: () => Promise<any>, fallback: any = []) => {
+    try {
+      return await fn();
+    } catch (e) {
+      console.error(e);
+      return fallback;
+    }
   };
 
-  const calculateAttendanceStats = () => {
+  // Load lớp học
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      const data = await safeFetch(getAllClasses);
+      setClasses(data);
+      if (data.length) setSelectedClass(data[0]._id);
+      setLoading(false);
+    })();
+  }, []);
+
+  // Khi chọn lớp => load sessions + students
+  useEffect(() => {
+    if (!selectedClass) return;
+    (async () => {
+      setLoading(true);
+      const [sessionsData, classDetail] = await Promise.all([
+        safeFetch(() => getAllSessionsByClassId(selectedClass)),
+        safeFetch(() => getClassDetail(selectedClass)),
+      ]);
+
+      // Lấy danh sách attendance cho tất cả sessions của lớp này
+      const allAttendances = await Promise.all(
+        sessionsData.map(async (session: any) => {
+          const response = await safeFetch(() =>
+            getAttendances({ sessionId: session._id })
+          );
+          const existing = Array.isArray(response)
+            ? response
+            : Array.isArray(response?.data)
+            ? response.data
+            : [];
+          return {
+            sessionId: session._id,
+            hasAttendance: existing.length > 0,
+          };
+        })
+      );
+
+      setAllSessionAttendances(allAttendances);
+      setSessions(sessionsData);
+      setStudents(classDetail?.studentIds || []);
+      setSelectedSession("");
+      setStudentsData([]);
+      setLoading(false);
+    })();
+  }, [selectedClass]);
+
+  // Khi chọn session => load attendance
+  useEffect(() => {
+    if (!selectedSession || !students.length) return;
+    (async () => {
+      setLoading(true);
+
+      const response = await safeFetch(() =>
+        getAttendances({ sessionId: selectedSession })
+      );
+      const existing = Array.isArray(response)
+        ? response
+        : Array.isArray(response?.data)
+        ? response.data
+        : [];
+
+      setAttendances(existing);
+
+      const map = new Map(existing.map((a) => [a.studentId, a]));
+      const merged = students.map((s) => {
+        const att = map.get(s.studentId);
+        return att
+          ? {
+              key: att._id,
+              _id: att._id,
+              studentId: s.studentId,
+              fullName: s.fullname,
+              status: att.status?.toUpperCase() || "ABSENT",
+              note: att.note || "",
+              isExisting: true,
+            }
+          : {
+              key: s._id,
+              _id: s._id,
+              studentId: s.studentId,
+              fullName: s.fullname,
+              status: "ABSENT",
+              note: "",
+              isExisting: false,
+            };
+      });
+      setStudentsData(merged);
+      setLoading(false);
+    })();
+  }, [selectedSession, students]);
+
+  // Filtered data + stats
+  const filteredStudentsData = useMemo(
+    () =>
+      studentsData.filter(
+        (s) =>
+          s.studentId.toLowerCase().includes(searchText.toLowerCase()) ||
+          s.fullName.toLowerCase().includes(searchText.toLowerCase())
+      ),
+    [studentsData, searchText]
+  );
+
+  const stats = useMemo(() => {
     const total = filteredStudentsData.length;
     const present = filteredStudentsData.filter(
-      (s) => s.status === "present"
+      (s) => s.status === "PRESENT"
     ).length;
     const absent = filteredStudentsData.filter(
-      (s) => s.status === "absent"
+      (s) => s.status === "ABSENT"
     ).length;
-    const late = filteredStudentsData.filter((s) => s.status === "late").length;
-    const attendanceRate =
-      total > 0 ? Math.round(((present + late) / total) * 100) : 0;
-    return { total, present, absent, late, attendanceRate };
-  };
-  const stats = calculateAttendanceStats();
+    const late = filteredStudentsData.filter((s) => s.status === "LATE").length;
+    return {
+      total,
+      present,
+      absent,
+      late,
+      attendanceRate: total ? Math.round(((present + late) / total) * 100) : 0,
+    };
+  }, [filteredStudentsData]);
 
-  const attendanceColumns = [
+  // Save attendance
+  const handleSaveAttendance = async () => {
+    if (!selectedSession || !studentsData.length) {
+      return message.error("Vui lòng chọn buổi học và có sinh viên");
+    }
+    setLoading(true);
+    const data = studentsData.map((s) => ({
+      studentId: s._id,
+      status: s.status,
+      note: s.note || "",
+    }));
+    try {
+      if (attendances.length)
+        await updateAttendance(selectedSession, { attendances: data });
+      else
+        await createAttendance({
+          sessionId: selectedSession,
+          attendances: data,
+        });
+
+      // Cập nhật danh sách attendance sau khi lưu thành công
+      setAllSessionAttendances((prev) =>
+        prev.map((item) =>
+          item.sessionId === selectedSession
+            ? { ...item, hasAttendance: true }
+            : item
+        )
+      );
+
+      // Reset selection để ẩn session đã điểm danh
+      setSelectedSession("");
+      setStudentsData([]);
+
+      message.success("Lưu điểm danh thành công!");
+    } catch (e) {
+      console.error(e);
+      message.error("Không thể lưu điểm danh");
+    }
+    setLoading(false);
+  };
+
+  // Lọc ra những session chưa có attendance
+  const availableSessions = sessions.filter((session) => {
+    const attendanceInfo = allSessionAttendances.find(
+      (a) => a.sessionId === session._id
+    );
+    return !attendanceInfo?.hasAttendance;
+  });
+
+  // Update local status/note
+  const updateStudent = (key: string, patch: any) =>
+    setStudentsData((prev) =>
+      prev.map((s) => (s.key === key ? { ...s, ...patch } : s))
+    );
+
+  const columns = [
     {
       title: "STT",
-      key: "index",
+      render: (_: any, __: any, i: number) => i + 1,
       width: 60,
-      render: (_: any, __: any, index: number) => index + 1,
     },
     {
       title: "Mã SV",
       dataIndex: "studentId",
-      key: "studentId",
-      width: 100,
-      render: (text: string) => (
-        <span className="font-mono text-blue-600">{text}</span>
+      render: (t: string) => (
+        <span className="font-mono text-blue-600">{t}</span>
       ),
     },
-    {
-      title: "Họ và tên",
-      dataIndex: "fullName",
-      key: "fullName",
-      render: (text: string) => <span className="font-medium">{text}</span>,
-    },
+    { title: "Họ tên", dataIndex: "fullName" },
     {
       title: "Trạng thái",
       dataIndex: "status",
-      key: "status",
-      width: 200,
-      render: (status: string, record: any) => (
+      render: (status: string, r: any) => (
         <Radio.Group
           value={status}
-          onChange={(e) => handleAttendanceChange(record.key, e.target.value)}
-          size="small"
+          onChange={(e) => updateStudent(r.key, { status: e.target.value })}
         >
-          <Radio.Button value="present" className="cursor-pointer">
+          <Radio.Button value="PRESENT">
             <CheckOutlined className="text-green-600 mr-1" />
             Có mặt
           </Radio.Button>
-          <Radio.Button value="late" className="cursor-pointer">
+          <Radio.Button value="LATE">
             <ExclamationCircleOutlined className="text-orange-600 mr-1" />
             Muộn
           </Radio.Button>
-          <Radio.Button value="absent" className="cursor-pointer">
+          <Radio.Button value="ABSENT">
             <CloseOutlined className="text-red-600 mr-1" />
             Vắng
           </Radio.Button>
@@ -243,405 +272,149 @@ const AttendanceManagementPage: React.FC = () => {
     {
       title: "Ghi chú",
       dataIndex: "note",
-      key: "note",
-      render: (text: string, record: any) => (
+      render: (t: string, r: any) => (
         <Input.TextArea
-          value={text}
-          onChange={(e) => {
-            const newData = studentsData.map((student) =>
-              student.key === record.key
-                ? { ...student, note: e.target.value }
-                : student
-            );
-            setStudentsData(newData);
-          }}
-          placeholder="Nhập ghi chú..."
+          value={t}
+          onChange={(e) => updateStudent(r.key, { note: e.target.value })}
           autoSize={{ minRows: 1, maxRows: 2 }}
-          className="text-sm"
         />
       ),
     },
-    {
-      title: "Tỷ lệ điểm danh",
-      dataIndex: "attendanceRate",
-      key: "attendanceRate",
-      width: 120,
-      render: (rate: number) => (
-        <div className="text-center">
-          <Progress
-            type="circle"
-            size={40}
-            percent={rate}
-            format={() => `${rate}%`}
-            strokeColor={
-              rate >= 90 ? "#52c41a" : rate >= 70 ? "#faad14" : "#ff4d4f"
-            }
-          />
-        </div>
-      ),
-    },
   ];
-
-  const statisticsColumns = [
-    {
-      title: "STT",
-      key: "index",
-      width: 60,
-      render: (_: any, __: any, index: number) => index + 1,
-    },
-    {
-      title: "Mã SV",
-      dataIndex: "studentId",
-      key: "studentId",
-      width: 100,
-      render: (text: string) => (
-        <span className="font-mono text-blue-600">{text}</span>
-      ),
-    },
-    {
-      title: "Họ và tên",
-      dataIndex: "fullName",
-      key: "fullName",
-      render: (text: string) => <span className="font-medium">{text}</span>,
-    },
-    {
-      title: "Tổng buổi học",
-      key: "totalSessions",
-      width: 120,
-      render: () => <span className="text-center block">20</span>,
-    },
-    {
-      title: "Có mặt",
-      key: "presentCount",
-      width: 100,
-      render: (_, record: any) => {
-        const presentCount = Math.floor((record.attendanceRate / 100) * 20);
-        return (
-          <span className="text-green-600 font-medium text-center block">
-            {presentCount}
-          </span>
-        );
-      },
-    },
-    {
-      title: "Vắng mặt",
-      key: "absentCount",
-      width: 100,
-      render: (_, record: any) => {
-        const absentCount = 20 - Math.floor((record.attendanceRate / 100) * 20);
-        return (
-          <span className="text-red-600 font-medium text-center block">
-            {absentCount}
-          </span>
-        );
-      },
-    },
-    {
-      title: "Tỷ lệ điểm danh",
-      dataIndex: "attendanceRate",
-      key: "attendanceRate",
-      width: 150,
-      render: (rate: number) => (
-        <div className="flex items-center space-x-2">
-          <Progress
-            percent={rate}
-            size="small"
-            strokeColor={
-              rate >= 90 ? "#52c41a" : rate >= 70 ? "#faad14" : "#ff4d4f"
-            }
-            className="flex-1"
-          />
-          <span className="text-sm font-medium">{rate}%</span>
-        </div>
-      ),
-    },
-    {
-      title: "Xếp loại",
-      key: "grade",
-      width: 100,
-      render: (_, record: any) => {
-        const rate = record.attendanceRate;
-        let grade = "";
-        let color = "";
-        if (rate >= 95) {
-          grade = "Xuất sắc";
-          color = "green";
-        } else if (rate >= 85) {
-          grade = "Tốt";
-          color = "blue";
-        } else if (rate >= 70) {
-          grade = "Khá";
-          color = "orange";
-        } else {
-          grade = "Yếu";
-          color = "red";
-        }
-        return <Tag color={color}>{grade}</Tag>;
-      },
-    },
-  ];
-
-  const handleSaveAttendance = () => {
-    message.success("Lưu điểm danh thành công!");
-  };
-  const handleExportReport = () => {
-    message.success("Đang xuất báo cáo điểm danh...");
-  };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <Spin spinning={loading}>
       <div className="p-6 max-w-7xl mx-auto">
-        {/* Page Header */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">
-            Quản lý điểm danh
-          </h2>
-          <p className="text-gray-600">
-            Thực hiện điểm danh và theo dõi tỷ lệ tham gia của sinh viên
-          </p>
-        </div>
-        {/* Filter Toolbar */}
+        <h2 className="text-2xl font-bold mb-2">Quản lý điểm danh</h2>
+        <p className="mb-6 text-gray-600">Theo dõi tỷ lệ tham gia sinh viên</p>
+
+        {/* Toolbar */}
         <Card className="mb-6">
-          <div className="flex flex-col space-y-4">
-            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-              <div className="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 flex-1">
-                <div className="relative flex-1 max-w-md">
-                  <Input
-                    placeholder="Tìm kiếm theo tên, mã sinh viên..."
-                    prefix={<SearchOutlined className="text-gray-400" />}
-                    value={searchText}
-                    onChange={(e) => setSearchText(e.target.value)}
-                    className="cursor-pointer"
-                    size="large"
-                  />
-                </div>
-                <Select
-                  placeholder="Chọn lớp học"
-                  value={selectedClass}
-                  onChange={setSelectedClass}
-                  className="w-full sm:w-48 cursor-pointer"
-                  size="large"
-                >
-                  {classes.map((cls) => (
-                    <Option key={cls.value} value={cls.value}>
-                      {cls.label}
-                    </Option>
-                  ))}
-                </Select>
-                <Select
-                  placeholder="Chọn môn học"
-                  allowClear
-                  value={selectedSubject}
-                  onChange={setSelectedSubject}
-                  className="w-full sm:w-48 cursor-pointer"
-                  size="large"
-                >
-                  {subjects.map((subject) => (
-                    <Option key={subject.value} value={subject.value}>
-                      {subject.label}
-                    </Option>
-                  ))}
-                </Select>
-                <Select
-                  placeholder="Chọn buổi học"
-                  allowClear
-                  value={selectedSession}
-                  onChange={setSelectedSession}
-                  className="w-full sm:w-64 cursor-pointer"
-                  size="large"
-                >
-                  {sessions.map((session) => (
-                    <Option key={session.value} value={session.value}>
-                      <div>
-                        <div className="font-medium">{session.label}</div>
-                        <div className="text-xs text-gray-500">
-                          {session.date} - {session.subject}
-                        </div>
-                      </div>
-                    </Option>
-                  ))}
-                </Select>
-              </div>
-              <div className="flex space-x-2">
-                <Button
-                  icon={<ReloadOutlined />}
-                  onClick={() => {
-                    setSearchText("");
-                    setSelectedSubject("");
-                    setSelectedSession("");
-                  }}
-                  className="cursor-pointer whitespace-nowrap !rounded-button"
-                >
-                  Làm mới
-                </Button>
-                <Button
-                  type="primary"
-                  icon={<ExportOutlined />}
-                  onClick={handleExportReport}
-                  className="cursor-pointer whitespace-nowrap !rounded-button"
-                >
-                  Xuất báo cáo
-                </Button>
-              </div>
-            </div>
+          <div className="flex flex-wrap gap-4 items-center">
+            <Input
+              placeholder="Tìm kiếm..."
+              prefix={<SearchOutlined />}
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              className="max-w-md"
+              size="large"
+            />
+            <Select
+              value={selectedClass}
+              onChange={setSelectedClass}
+              placeholder="Chọn lớp"
+              className="w-48"
+              size="large"
+            >
+              {classes.map((c) => (
+                <Option key={c._id} value={c._id}>
+                  {c.name}
+                </Option>
+              ))}
+            </Select>
+            <Select
+              value={selectedSession}
+              onChange={setSelectedSession}
+              placeholder="Chọn buổi học"
+              className="w-64"
+              size="large"
+              disabled={!availableSessions.length}
+            >
+              {availableSessions.map((s, i) => (
+                <Option key={s._id} value={s._id}>
+                  Buổi{" "}
+                  {sessions.findIndex((session) => session._id === s._id) + 1} -{" "}
+                  {s.sessionDate
+                    ? new Date(s.sessionDate).toLocaleDateString("vi-VN")
+                    : "N/A"}
+                </Option>
+              ))}
+            </Select>
+            <Button
+              type="primary"
+              onClick={handleSaveAttendance}
+              disabled={!selectedSession || !studentsData.length}
+            >
+              Lưu điểm danh
+            </Button>
           </div>
         </Card>
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-          <Card>
-            <Statistic
-              title="Tổng số sinh viên"
-              value={stats.total}
-              prefix={<UserAddOutlined className="text-blue-600" />}
-              valueStyle={{ color: "#1890ff" }}
-            />
-          </Card>
-          <Card>
-            <Statistic
-              title="Có mặt"
-              value={stats.present}
-              prefix={<CheckOutlined className="text-green-600" />}
-              valueStyle={{ color: "#52c41a" }}
-            />
-          </Card>
-          <Card>
-            <Statistic
-              title="Vắng mặt"
-              value={stats.absent}
-              prefix={<CloseOutlined className="text-red-600" />}
-              valueStyle={{ color: "#ff4d4f" }}
-            />
-          </Card>
-          <Card>
-            <Statistic
-              title="Tỷ lệ điểm danh"
-              value={stats.attendanceRate}
-              suffix="%"
-              prefix={<BarChartOutlined className="text-orange-600" />}
-              valueStyle={{
-                color: stats.attendanceRate >= 80 ? "#52c41a" : "#faad14",
-              }}
-            />
-          </Card>
-        </div>
-        {/* Main Content Tabs */}
-        <Card>
-          <Tabs
-            activeKey={viewMode}
-            onChange={setViewMode}
-            className="cursor-pointer"
+
+        {/* Hiển thị thông báo khi không còn buổi học nào */}
+        {selectedClass &&
+          sessions.length > 0 &&
+          availableSessions.length === 0 && (
+            <Card className="mb-6 text-center py-8">
+              <p className="text-gray-500">
+                Tất cả các buổi học của lớp này đã được điểm danh
+              </p>
+            </Card>
+          )}
+
+        {/* Stats */}
+        {selectedSession && studentsData.length > 0 && (
+          <div className="grid md:grid-cols-4 gap-6 mb-6">
+            <Card>
+              <Statistic
+                title="Tổng SV"
+                value={stats.total}
+                prefix={<UserAddOutlined />}
+              />
+            </Card>
+            <Card>
+              <Statistic
+                title="Có mặt"
+                value={stats.present}
+                valueStyle={{ color: "#52c41a" }}
+                prefix={<CheckCircleOutlined />}
+              />
+            </Card>
+            <Card>
+              <Statistic
+                title="Vắng"
+                value={stats.absent}
+                valueStyle={{ color: "#ff4d4f" }}
+                prefix={<CloseOutlined />}
+              />
+            </Card>
+            <Card>
+              <Statistic
+                title="Tỷ lệ"
+                value={stats.attendanceRate}
+                suffix="%"
+                valueStyle={{
+                  color: stats.attendanceRate >= 80 ? "#52c41a" : "#ff4d4f",
+                }}
+                prefix={<BarChartOutlined />}
+              />
+            </Card>
+          </div>
+        )}
+
+        {/* Table */}
+        {selectedSession && studentsData.length > 0 ? (
+          <Card
+            title={`Điểm danh lớp ${
+              classes.find((c) => c._id === selectedClass)?.name || ""
+            }`}
           >
-            <TabPane
-              tab={
-                <span>
-                  <CheckCircleOutlined className="mr-2" />
-                  Điểm danh
-                </span>
-              }
-              key="attendance"
-            >
-              <div className="mb-4 flex justify-between items-center">
-                <div className="text-lg font-semibold text-gray-800">
-                  Danh sách sinh viên lớp{" "}
-                  {classes.find((c) => c.value === selectedClass)?.label}
-                </div>
-                <Button
-                  type="primary"
-                  icon={<CheckOutlined />}
-                  onClick={handleSaveAttendance}
-                  size="large"
-                  className="cursor-pointer whitespace-nowrap !rounded-button"
-                >
-                  Lưu điểm danh
-                </Button>
-              </div>
-              <Table
-                columns={attendanceColumns}
-                dataSource={filteredStudentsData}
-                pagination={{
-                  total: filteredStudentsData.length,
-                  pageSize: 10,
-                  showSizeChanger: true,
-                  showQuickJumper: true,
-                  showTotal: (total, range) =>
-                    `${range[0]}-${range[1]} của ${total} sinh viên`,
-                }}
-                scroll={{ x: 1000 }}
-                className="border border-gray-200 rounded-lg"
-              />
-            </TabPane>
-            <TabPane
-              tab={
-                <span>
-                  <BarChartOutlined className="mr-2" />
-                  Thống kê
-                </span>
-              }
-              key="statistics"
-            >
-              <div className="mb-4">
-                <div className="text-lg font-semibold text-gray-800 mb-4">
-                  Thống kê điểm danh chi tiết
-                </div>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                  <Card className="text-center">
-                    <div className="text-2xl font-bold text-green-600 mb-2">
-                      {stats.attendanceRate}%
-                    </div>
-                    <div className="text-gray-600">
-                      Tỷ lệ điểm danh trung bình
-                    </div>
-                    <Progress
-                      percent={stats.attendanceRate}
-                      strokeColor="#52c41a"
-                      className="mt-2"
-                    />
-                  </Card>
-                  <Card className="text-center">
-                    <div className="text-2xl font-bold text-blue-600 mb-2">
-                      {
-                        studentsData.filter((s) => s.attendanceRate >= 90)
-                          .length
-                      }
-                    </div>
-                    <div className="text-gray-600">
-                      Sinh viên điểm danh tốt (≥90%)
-                    </div>
-                  </Card>
-                  <Card className="text-center">
-                    <div className="text-2xl font-bold text-red-600 mb-2">
-                      {studentsData.filter((s) => s.attendanceRate < 70).length}
-                    </div>
-                    <div className="text-gray-600">
-                      Sinh viên cần quan tâm (&lt;70%)
-                    </div>
-                  </Card>
-                </div>
-              </div>
-              <Table
-                columns={statisticsColumns}
-                dataSource={filteredStudentsData}
-                pagination={{
-                  total: filteredStudentsData.length,
-                  pageSize: 10,
-                  showSizeChanger: true,
-                  showQuickJumper: true,
-                  showTotal: (total, range) =>
-                    `${range[0]}-${range[1]} của ${total} sinh viên`,
-                }}
-                scroll={{ x: 1000 }}
-                className="border border-gray-200 rounded-lg"
-              />
-            </TabPane>
-          </Tabs>
-        </Card>
+            <Table
+              rowKey="key"
+              columns={columns}
+              dataSource={filteredStudentsData}
+              pagination={false}
+              scroll={{ x: 1000 }}
+            />
+          </Card>
+        ) : (
+          <Card className="text-center py-8 text-gray-500">
+            {!selectedSession
+              ? "Vui lòng chọn lớp học và buổi học"
+              : "Không có sinh viên nào"}
+          </Card>
+        )}
       </div>
-      <style jsx>{`
-        .!rounded-button {
-          border-radius: 8px !important;
-        }
-      `}</style>
-    </div>
+    </Spin>
   );
 };
 

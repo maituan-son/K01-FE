@@ -1,244 +1,232 @@
-import { useState, useEffect, FormEvent } from "react";
-import { ShiftEnum, RoomEnum } from "../../common/types";
-import { Table, Button, Form, Select, DatePicker, Alert, Spin, Card, Typography, Space } from "antd";
-import dayjs from "dayjs";
+import SessionTable from "@/components/admin/SessionTable";
+import { getAllSessionsByClassId } from "@/common/services/sessionService";
+import { getAllClasses } from "@/common/services/classSercive";
+import { useQuery } from "@tanstack/react-query";
+import { useParams, useNavigate } from "react-router-dom";
+import { getClassDetail } from "@/common/services/classSercive";
+import { Select, Card, Spin, Row, Col, Badge, Button } from "antd";
+import { useState, useEffect } from "react";
+import {
+  BookOutlined,
+  UserOutlined,
+  CalendarOutlined,
+} from "@ant-design/icons";
 
-const { Title } = Typography;
+const { Option } = Select;
 
-interface Class {
-    _id: string;
-    name: string;
-    subjectId: string;
-    majorId: string;
-    teacherId: string;
-    startDate: string;
-    totalSessions: number;
-    shift: ShiftEnum;
-}
+export const SessionManagementPage = () => {
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const navigate = useNavigate();
 
-interface Session {
-    _id: string;
-    classId: string;
-    sessionDate: string;
-    shift: ShiftEnum;
-    room: RoomEnum;
-    createdAt: string;
-}
+  // Lấy thông tin user từ localStorage
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const teacherId = user._id;
 
-const SessionManagementPage = () => {
-    const [sessions, setSessions] = useState<Session[]>([]);
-    const [classes, setClasses] = useState<Class[]>([]);
-    const [form] = Form.useForm();
-    const [error, setError] = useState<string | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [showForm, setShowForm] = useState(false);
-    const [prioritizeTeacher, setPrioritizeTeacher] = useState(true);
+  // Lấy danh sách lớp học của giáo viên
+  const { data: classes = [], isLoading: classesLoading } = useQuery({
+    queryKey: ["teacher-classes", teacherId],
+    queryFn: () => getAllClasses({ teacherId }),
+    enabled: !!teacherId,
+  });
 
-    const user = JSON.parse(localStorage.getItem("user") || "{}");
-    const teacherId = user._id;
+  // Lấy chi tiết lớp học được chọn
+  const { data: classDetail, isLoading: classDetailLoading } = useQuery({
+    queryKey: ["class-detail", selectedClassId],
+    queryFn: () => getClassDetail(selectedClassId!),
+    enabled: !!selectedClassId,
+  });
 
-    useEffect(() => {
-        const fetchData = async () => {
-            setLoading(true);
-            try {
-                const classesResponse = await fetch(`/api/classes?teacherId=${teacherId}`);
-                if (!classesResponse.ok) throw new Error("Không thể lấy danh sách lớp học");
-                const classesData = await classesResponse.json();
-                setClasses(classesData);
+  // Lấy danh sách buổi học của lớp được chọn
+  const { data: sessions = [], isLoading: sessionsLoading } = useQuery({
+    queryKey: ["sessions", selectedClassId],
+    queryFn: () => getAllSessionsByClassId(selectedClassId!),
+    enabled: !!selectedClassId,
+  });
 
-                const sessionsResponse = await fetch(`/api/sessions?teacherId=${teacherId}`);
-                if (!sessionsResponse.ok) throw new Error("Không thể lấy danh sách buổi học");
-                const sessionsData = await sessionsResponse.json();
-                setSessions(sessionsData);
-            } catch (err: any) {
-                setError(err.message);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchData();
-    }, [teacherId]);
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "completed":
+        return "green";
+      case "upcoming":
+        return "blue";
+      case "cancelled":
+        return "red";
+      default:
+        return "default";
+    }
+  };
 
-    const fetchAvailableOptions = async (sessionDate: string, shift: ShiftEnum) => {
-        try {
-            if (prioritizeTeacher) {
-                const response = await fetch(`/api/available-shifts?teacherId=${teacherId}&date=${sessionDate}`);
-                if (!response.ok) throw new Error("Không thể lấy ca học khả dụng");
-                return await response.json();
-            } else {
-                const response = await fetch(`/api/available-rooms?date=${sessionDate}&shift=${shift}`);
-                if (!response.ok) throw new Error("Không thể lấy phòng học khả dụng");
-                return await response.json();
-            }
-        } catch (err: any) {
-            setError(err.message);
-            return [];
-        }
-    };
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "active":
+        return "Đang hoạt động";
+      case "upcoming":
+        return "Sắp diễn ra";
+      case "completed":
+        return "Đã hoàn thành";
+      case "cancelled":
+        return "Đã hủy";
+      case "overdue":
+        return "Quá hạn";
+      default:
+        return status;
+    }
+  };
 
-    const handleSubmit = async (values: any) => {
-        setLoading(true);
-        setError(null);
-        try {
-            const sessionDate = values.sessionDate.format("YYYY-MM-DD");
-            const availableOptions = await fetchAvailableOptions(sessionDate, values.shift);
-            if (prioritizeTeacher && !availableOptions.includes(values.shift)) {
-                throw new Error("Giảng viên đã có lịch trong ca này");
-            } else if (!prioritizeTeacher && !availableOptions.includes(values.room)) {
-                throw new Error("Phòng học không khả dụng trong ca này");
-            }
-            const response = await fetch("/api/sessions", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ...values, sessionDate, teacherId }),
-            });
-            if (!response.ok) throw new Error("Không thể tạo buổi học");
-            const newSession = await response.json();
-            setSessions([...sessions, newSession]);
-            form.resetFields();
-            setShowForm(false);
-        } catch (err: any) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
-    };
+  const handleClassSelect = (classId: string) => {
+    setSelectedClassId(classId);
+  };
 
-    const columns = [
-        {
-            title: "Lớp học",
-            dataIndex: "classId",
-            key: "classId",
-            render: (id: string) => classes.find((c) => c._id === id)?.name || "N/A",
-        },
-        {
-            title: "Ngày học",
-            dataIndex: "sessionDate",
-            key: "sessionDate",
-            render: (date: string) => dayjs(date).format("DD/MM/YYYY"),
-        },
-        {
-            title: "Ca học",
-            dataIndex: "shift",
-            key: "shift",
-        },
-        {
-            title: "Phòng học",
-            dataIndex: "room",
-            key: "room",
-        },
-    ];
+  const handleBackToClasses = () => {
+    setSelectedClassId(null);
+  };
 
+  const handleViewAttendance = (classId: string) => {
+    navigate(`/teacher/attendance-detail/${classId}`);
+  };
+
+  if (classesLoading) {
     return (
-        <div style={{ maxWidth: 900, margin: "0 auto", padding: 24 }}>
-            <Card>
-                <Title level={3} style={{ marginBottom: 16 }}>Quản lý buổi học</Title>
-                {error && <Alert message={error} type="error" showIcon style={{ marginBottom: 16 }} />}
-                {loading && <Spin style={{ marginBottom: 16 }} />}
-                <Space direction="vertical" style={{ width: "100%" }} size="large">
-                    <Table
-                        dataSource={sessions}
-                        columns={columns}
-                        rowKey="_id"
-                        pagination={false}
-                        locale={{ emptyText: "Chưa có buổi học nào." }}
-                        bordered
-                        size="middle"
-                    />
-                    <Button type={showForm ? "default" : "primary"} onClick={() => setShowForm(!showForm)}>
-                        {showForm ? "Hủy" : "Thêm buổi học"}
-                    </Button>
-                    {showForm && (
-                        <Form
-                            form={form}
-                            layout="vertical"
-                            onFinish={handleSubmit}
-                            initialValues={{
-                                classId: "",
-                                sessionDate: null,
-                                shift: ShiftEnum.ONE,
-                                room: RoomEnum.ONLINE,
-                            }}
-                            style={{ background: "#fafcff", padding: 24, borderRadius: 8, boxShadow: "0 2px 8px #f0f1f2" }}
-                        >
-                            <Form.Item
-                                label="Lớp học"
-                                name="classId"
-                                rules={[{ required: true, message: "Vui lòng chọn lớp học" }]}
-                            >
-                                <Select placeholder="Chọn lớp học">
-                                    {classes.map((cls) => (
-                                        <Select.Option key={cls._id} value={cls._id}>
-                                            {cls.name}
-                                        </Select.Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
-                            <Form.Item
-                                label="Ngày học"
-                                name="sessionDate"
-                                rules={[{ required: true, message: "Vui lòng chọn ngày học" }]}
-                            >
-                                <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY" />
-                            </Form.Item>
-                            <Form.Item
-                                label="Ca học"
-                                name="shift"
-                                rules={[{ required: true, message: "Vui lòng chọn ca học" }]}
-                            >
-                                <Select>
-                                    {Object.values(ShiftEnum).map((shift) => (
-                                        <Select.Option key={shift} value={shift}>
-                                            Ca {shift} (
-                                            {shift === "1"
-                                                ? "7h-9h"
-                                                : shift === "2"
-                                                ? "9h-11h"
-                                                : shift === "3"
-                                                ? "11h-13h"
-                                                : shift === "4"
-                                                ? "13h-15h"
-                                                : shift === "5"
-                                                ? "15h-17h"
-                                                : "17h-19h"}
-                                            )
-                                        </Select.Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
-                            <Form.Item
-                                label="Phòng học"
-                                name="room"
-                                rules={[{ required: true, message: "Vui lòng chọn phòng học" }]}
-                            >
-                                <Select>
-                                    {Object.values(RoomEnum).map((room) => (
-                                        <Select.Option key={room} value={room}>
-                                            {room}
-                                        </Select.Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
-                            <Form.Item label="Ưu tiên">
-                                <Select
-                                    value={prioritizeTeacher ? "teacher" : "shift"}
-                                    onChange={(v) => setPrioritizeTeacher(v === "teacher")}
-                                >
-                                    <Select.Option value="teacher">Ưu tiên lịch giảng viên</Select.Option>
-                                    <Select.Option value="shift">Ưu tiên ca học</Select.Option>
-                                </Select>
-                            </Form.Item>
-                            <Form.Item>
-                                <Button type="primary" htmlType="submit" block loading={loading}>
-                                    Tạo buổi học
-                                </Button>
-                            </Form.Item>
-                        </Form>
-                    )}
-                </Space>
-            </Card>
-        </div>
+      <div className="flex justify-center items-center h-64">
+        <Spin size="large" />
+      </div>
     );
+  }
+
+  if (classes.length === 0) {
+    return (
+      <Card>
+        <div className="text-center py-8">
+          <p className="text-gray-500">Bạn chưa được phân công dạy lớp nào.</p>
+        </div>
+      </Card>
+    );
+  }
+
+  // Hiển thị danh sách lớp học
+  if (!selectedClassId) {
+    return (
+      <div>
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">
+            Danh sách lớp học
+          </h2>
+          <p className="text-gray-600">Chọn lớp học để quản lý buổi học</p>
+        </div>
+
+        <Row gutter={[16, 16]}>
+          {classes.map((cls: any) => (
+            <Col xs={24} sm={12} md={8} lg={6} key={cls._id}>
+              <Card
+                hoverable
+                className="h-full cursor-pointer transition-all duration-300 hover:shadow-lg"
+                onClick={() => handleClassSelect(cls._id)}
+                bodyStyle={{ padding: "20px" }}
+              >
+                <div className="text-center">
+                  <div className="mb-3">
+                    <BookOutlined className="text-3xl text-blue-500" />
+                  </div>
+
+                  <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                    {cls.name}
+                  </h3>
+
+                  <div className="space-y-2 text-sm text-gray-600">
+                    <div className="flex items-center justify-center">
+                      <BookOutlined className="mr-2" />
+                      <span>{cls.subjectId?.name || "Chưa có môn học"}</span>
+                    </div>
+                    <div className="flex items-center justify-center">
+                      <UserOutlined className="mr-2" />
+                      <span>{cls.studentIds?.length || 0} học sinh</span>
+                    </div>
+                    {/* Buổi học */}
+                    <div className="flex items-center justify-center">
+                      <span className="font-semibold">Buổi học:</span>{" "}
+                      {cls.totalSessions || 0} buổi
+                    </div>
+                    <div className="flex items-center justify-center">
+                      <CalendarOutlined className="mr-2" />
+                      <Badge
+                        status={cls.status === "active" ? "success" : "default"}
+                        text={getStatusText(cls.status)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-4">
+                    <Row gutter={8}>
+                      <Col span={12}>
+                        <Button type="primary" size="small" block>
+                          Xem buổi học
+                        </Button>
+                      </Col>
+                      <Col span={12}>
+                        <Button
+                          type="default"
+                          size="small"
+                          block
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewAttendance(cls._id);
+                          }}
+                        >
+                          Xem Điểm Danh
+                        </Button>
+                      </Col>
+                    </Row>
+                  </div>
+                </div>
+              </Card>
+            </Col>
+          ))}
+        </Row>
+      </div>
+    );
+  }
+
+  // Hiển thị chi tiết buổi học của lớp được chọn
+  return (
+    <div>
+      <div className="mb-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <Button onClick={handleBackToClasses} className="mb-3">
+              ← Quay lại danh sách lớp
+            </Button>
+            <h2 className="text-2xl font-bold text-gray-800">
+              Quản lý buổi học
+            </h2>
+            {classDetail && (
+              <p className="text-gray-600">
+                Lớp: {classDetail.name} -{" "}
+                {classDetail.subjectId?.name || "Chưa có môn học"}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {classDetail ? (
+        <SessionTable
+          sessions={sessions}
+          classDetail={classDetail}
+          sessionsLoading={sessionsLoading || classDetailLoading}
+          getStatusColor={getStatusColor}
+          getStatusText={getStatusText}
+          onCreateSession={() => console.log("Create session")}
+        />
+      ) : (
+        <Card>
+          <div className="text-center py-8">
+            <Spin size="large" />
+            <p className="text-gray-500 mt-4">Đang tải thông tin lớp học...</p>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
 };
 
 export default SessionManagementPage;

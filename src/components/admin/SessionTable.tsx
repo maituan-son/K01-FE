@@ -58,7 +58,9 @@ const SessionTable: React.FC<SessionTableProps> = ({
       key: "sessionNumber",
       width: 60,
       render: (_: unknown, __: unknown, index: number) => (
-        <div className="text-center font-medium text-blue-600">#{index + 1}</div>
+        <div className="text-center font-medium text-blue-600">
+          #{index + 1}
+        </div>
       ),
     },
     {
@@ -68,7 +70,7 @@ const SessionTable: React.FC<SessionTableProps> = ({
       width: 100,
       render: (date: string) => (
         <div className="text-gray-700">
-          {date ? new Date(date).toLocaleDateString('vi-VN') : "Chưa có"}
+          {date ? new Date(date).toLocaleDateString("vi-VN") : "Chưa có"}
         </div>
       ),
     },
@@ -93,9 +95,7 @@ const SessionTable: React.FC<SessionTableProps> = ({
       dataIndex: "note",
       key: "note",
       render: (note: string) => (
-        <div className="text-gray-700">
-          {note || "Không có ghi chú"}
-        </div>
+        <div className="text-gray-700">{note || "Không có ghi chú"}</div>
       ),
     },
     {
@@ -120,7 +120,12 @@ const SessionTable: React.FC<SessionTableProps> = ({
               {record.attendanceCount}/{classDetail.studentIds?.length || 0}
             </div>
             <div className="text-xs text-gray-500">
-              {Math.round((record.attendanceCount / (classDetail.studentIds?.length || 1)) * 100)}%
+              {Math.round(
+                (record.attendanceCount /
+                  (classDetail.studentIds?.length || 1)) *
+                  100
+              )}
+              %
             </div>
           </div>
         ) : (
@@ -165,11 +170,17 @@ const SessionTable: React.FC<SessionTableProps> = ({
         locale={{
           emptyText: (
             <div className="text-center py-8">
-              <div className="text-gray-400 mb-2">Chưa có buổi học nào cho lớp này</div>
+              <div className="text-gray-400 mb-2">
+                Chưa có buổi học nào cho lớp này
+              </div>
               <div className="text-sm text-gray-500 mb-4">
                 Bạn có thể tạo buổi học đầu tiên để bắt đầu quản lý lịch học
               </div>
-              <Button type="primary" icon={<PlusOutlined />} onClick={onCreateSession}>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={onCreateSession}
+              >
                 Tạo buổi học đầu tiên
               </Button>
             </div>
@@ -180,4 +191,4 @@ const SessionTable: React.FC<SessionTableProps> = ({
   );
 };
 
-export default SessionTable; 
+export default SessionTable;

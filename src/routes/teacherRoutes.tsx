@@ -4,6 +4,8 @@ import AttendanceManagermentPage from "../pages/teacher/AttendanceManagementPage
 import ProtectedRoute from "./components/ProtectedRoute";
 import TeacherLayout from "../components/layouts/TeacherLayout";
 import SessionManagementPage from "../pages/teacher/SessionManagementPage";
+import AttendanceDetailPage from "@/pages/teacher/AttendanceDetailPage";
+import AttendancaSessionPage from "@/pages/teacher/AttendancaSessionPage";
 
 const teacherRoutes: RouteObject[] = [
   {
@@ -22,6 +24,14 @@ const teacherRoutes: RouteObject[] = [
       {
         path: "attendances",
         element: <AttendanceManagermentPage />,
+      },
+      {
+        path: "attendance-session/:sessionId",
+        element: <AttendancaSessionPage />,
+      },
+      {
+        path: "attendance-detail/:classId",
+        element: <AttendanceDetailPage />,
       },
     ],
   },
