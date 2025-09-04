@@ -237,6 +237,13 @@ const UserManagementPage: React.FC = () => {
                 <Input />
               </Form.Item>
               <Form.Item
+                name="username"
+                label="Username"
+                rules={[{ required: true }]}
+              >
+                <Input />
+              </Form.Item>
+              <Form.Item
                 name="email"
                 label="Email"
                 rules={[{ required: true, type: "email" }]}

@@ -31,3 +31,8 @@ export const restoreSession = async (id: string): Promise<Session> => {
     const res = await apiClient.patch(`/session/${id}/restore`);
     return res.data.data;
 };
+
+export const getAllSessionsByStudentId = async (studentId: string): Promise<Session[]> => {
+    const res = await apiClient.get(`/session/student/${studentId}`);
+    return res.data.data;
+};
